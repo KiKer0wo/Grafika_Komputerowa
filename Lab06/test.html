@@ -7,8 +7,6 @@ var shaderProgram;
 var uPMatrix;
 var vertexPositionBuffer;
 var vertexColorBuffer;
-
-
 function MatrixMul(a,b) //Mnożenie macierzy
 {
   c = [
@@ -73,7 +71,7 @@ function createRectColor(r,g,b)
   return vertexColor;
 }
 
-let uMVMatrix = null;
+
 function startGL() 
 {
   alert("StartGL");
@@ -81,7 +79,7 @@ function startGL()
   gl = canvas.getContext("experimental-webgl"); //pobranie kontekstu OpenGL'u z obiektu canvas
   gl.viewportWidth = canvas.width; //przypisanie wybranej przez nas rozdzielczości do systemu OpenGL
   gl.viewportHeight = canvas.height;
-  
+
 
   //Kod shaderów
   const vertextShaderSource = ` //Znak akcentu z przycisku tyldy - na lewo od przycisku 1 na klawiaturze
@@ -141,7 +139,7 @@ function startGL()
   for(let Big_angle=0; Big_angle<=1;Big_angle+=1){
     SmallRadius=SmallRadius*(-1);
   
-  for(let elevation=-90; elevation< 90; elevation+= stepElevation){
+  for(let elevation=-180; elevation< 180; elevation+= stepElevation){
     
     let radiusXZ = radius* Math.cos(elevation*Math.PI/180)+SmallRadius;
     let radiusY = radius*Math.sin(elevation*Math.PI/180)+1.75
@@ -249,7 +247,6 @@ var angleZ = 0.0;
 var angleY = +100.0;
 var angleX = 0.0;
 var tz = -25.0;
-
 function Tick()
 {  
   let uMVMatrix = [
@@ -331,52 +328,15 @@ function Tick()
 
 function handlekeydown(e)
 {
-
-  if(e.keyCode==68) {
-    angleY=angleY+1.0;
-    const stepAngle = 1;
-    let rotationYAxis = [
-    +Math.cos(stepAngle*Math.PI/180.0),0,-Math.sin(stepAngle*Math.PI/180.0),0,
-    0,1,0,0,
-    +Math.sin(stepAngle*Math.PI/180.0),0,+Math.cos(stepAngle*Math.PI/180.0),0,
-    0,0,0,1
-    ];
-    uMVMatrix = MatrixMul(uMVMatrix,rotationYAxis);
-  }
-  
-  if(e.keyCode==65) {
-    angleY=angleY-1.0;
-    const stepAngle = -1;
-    let rotationYAxis = [
-    +Math.cos(stepAngle*Math.PI/180.0),0,-Math.sin(stepAngle*Math.PI/180.0),0,
-    0,1,0,0,
-    +Math.sin(stepAngle*Math.PI/180.0),0,+Math.cos(stepAngle*Math.PI/180.0),0,
-    0,0,0,1
-    ];
-    uMVMatrix = MatrixMul(uMVMatrix,rotationYAxis);
-  }
-  if(e.keyCode==87)
- {
-    angleX=angleX+1.0; //W
-    //Ekstrakcja głownych kierunków zgodnie z bierzącą macierzą rotacji 
-    let xAxis = [uMVMatrix[0],uMVMatrix[4],uMVMatrix[ 8]];
-    let yAxis = [uMVMatrix[1],uMVMatrix[5],uMVMatrix[ 9]];
-    let zAxis = [uMVMatrix[2],uMVMatrix[6],uMVMatrix[10]];
-    //Dopasowanie rozmiaru kroku
-    let stepSize = 0.01;
-    zAxis = [stepSize*zAxis[0],stepSize*zAxis[1],stepSize*zAxis[2]];
-    //Macierz 
-    const translationZAxis = [
-    1.0,0.0,0.0,0.0,
-    0.0,1.0,0.0,0.0,
-    0.0,0.0,1.0,0.0,
-    zAxis[0],zAxis[1],zAxis[2],1.0
-    ];
-
-    uMVMatrix = MatrixMul(uMVMatrix,translationZAxis);
- }
+ if(e.keyCode==87) angleX=angleX+1.0; //W
+ if(e.keyCode==83) angleX=angleX-1.0; //S
+ if(e.keyCode==68) angleY=angleY+1.0;
+ if(e.keyCode==65) angleY=angleY-1.0;
+ if(e.keyCode==81) angleZ=angleZ+1.0;
+ if(e.keyCode==69) angleZ=angleZ-1.0;
+ //alert(e.keyCode);
+ //alert(angleX);
 }
-
 </script>
 </head>
 <body onload="startGL()" onkeydown="handlekeydown(event)">
