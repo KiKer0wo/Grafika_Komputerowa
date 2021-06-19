@@ -292,7 +292,7 @@ function startGL()
 let angleX = 0.0
 let angleY = 0.0
 let angleZ = 0.0
-var tZ = -8.0
+var tZ = -20.0
 
 let lightX = 10
 let lightY = 4
@@ -446,12 +446,28 @@ function Tick()
 
 function handlekeydown(e)
 {
- if(e.keyCode==87) angleX=angleX+1.0; //W
+if(e.keyCode==87) angleX=angleX+1.0; //W
  if(e.keyCode==83) angleX=angleX-1.0; //S
  if(e.keyCode==68) angleY=angleY+1.0;
  if(e.keyCode==65) angleY=angleY-1.0;
  if(e.keyCode==81) angleZ=angleZ+1.0;
  if(e.keyCode==69) angleZ=angleZ-1.0;
+
+ if(e.keyCode==76) lightX=lightX+0.5;
+ if(e.keyCode==74) lightX=lightX-0.5;
+ if(e.keyCode==73) lightY=lightY+0.5;
+ if(e.keyCode==75) lightY=lightY-0.5;
+ if(e.keyCode==85) lightZ=lightZ+0.5;
+ if(e.keyCode==79) lightZ=lightZ-0.5;
+
+ if(e.keyCode==78) camPosX += 0.1
+ if(e.keyCode==86) camPosX -= 0.1
+
+ if(e.keyCode==88) camPosY += 0.1
+ if(e.keyCode==90) camPosY -= 0.1
+
+ if(e.keyCode==66) camPosZ += 0.1
+ if(e.keyCode==67) camPosZ -= 0.1
  //alert(e.keyCode);
  //alert(angleX);
 }
