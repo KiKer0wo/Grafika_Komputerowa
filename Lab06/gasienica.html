@@ -1,0 +1,463 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<script type="text/javascript">
+var gl;
+var shaderProgram;
+var uPMatrix;
+var vertexPositionBuffer;
+var vertexColorBuffer;
+var vertexCoordsBuffer;
+var vertexCoordBuffer;
+var vertexNormalBuffer;
+
+
+const mulMatrix = (a, b) => {
+  const n = 4
+  const res = new Array(n ** 2)
+
+  for (let i = 0; i < n; ++i) {
+    for (let j = 0; j < n; ++j) {
+      res[4 * i + j] = 0
+      for (let k = 0; k < n; ++k) {
+        res[4 * i + j] += a[4 * i + k] * b[4 * k + j]
+      }
+    }
+  }
+
+  return res
+}
+
+const createIdentityMatrix = () => [
+  1, 0, 0, 0,
+  0, 1, 0, 0,
+  0, 0, 1, 0,
+  0, 0, 0, 1
+]
+
+const createRotationXMatrix = angleX => [
+  1, 0, 0, 0,
+  0, +Math.cos(angleX * Math.PI / 180.0), +Math.sin(angleX * Math.PI / 180.0), 0,
+  0, -Math.sin(angleX * Math.PI / 180.0), +Math.cos(angleX * Math.PI / 180.0), 0,
+  0, 0, 0, 1
+]
+
+const createRotationYMatrix = angleY => [
+  +Math.cos(angleY * Math.PI / 180.0), 0, -Math.sin(angleY * Math.PI / 180.0), 0,
+  0, 1, 0, 0,
+  +Math.sin(angleY * Math.PI / 180.0), 0, +Math.cos(angleY * Math.PI / 180.0), 0,
+  0, 0, 0, 1
+]
+
+const createRotationZMatrix = angleZ => [
+  +Math.cos(angleZ * Math.PI / 180.0), +Math.sin(angleZ * Math.PI / 180.0), 0, 0,
+  -Math.sin(angleZ * Math.PI / 180.0), +Math.cos(angleZ * Math.PI / 180.0), 0, 0,
+  0, 0, 1, 0,
+  0, 0, 0, 1
+]
+
+const createTranslationMatrix = (tX, tY, tZ) => [
+  1, 0, 0, 0,
+  0, 1, 0, 0,
+  0, 0, 1, 0,
+  tX, tY, tZ, 1
+]
+
+const createScaleMatrix = (sX, sY, sZ) => [
+  sX, 0, 0, 0,
+  0, sY, 0, 0,
+  0, 0, sZ, 0,
+  0, 0, 0, 1
+]
+
+const createRect = (p1, p2, p3, p4) => {
+  const [p1x, p1y, p1z] = p1
+  const [p2x, p2y, p2z] = p2
+  const [p3x, p3y, p3z] = p3
+  const [p4x, p4y, p4z] = p4
+
+  return [
+    p1x, p1y, p1z, p2x, p2y, p2z, p4x, p4y, p4z,
+    p1x, p1y, p1z, p4x, p4y, p4z, p3x, p3y, p3z
+  ]
+}
+
+const createRectColor = (r, g, b) => [
+  r, g, b, r, g, b, r, g, b,
+  r, g, b, r, g, b, r, g, b
+]
+
+const createRectCoords = (mu, mv, dau, dav, dbu, dbv) => {
+  const p1 = [mu, mv]
+  const p2 = [mu + dau, mv + dav]
+  const p3 = [mu + dbu, mv + dbv]
+  const p4 = [mu + dau + dbu, mv + dav + dbv]
+
+  return [
+    ...p1, ...p2, ...p4,
+    ...p1, ...p4, ...p3
+  ]
+}
+
+const createSphere = (x, y, z, radius, numStepsElevation, numStepsAngle) => {
+  const vertexPosition = []
+  const vertexNormal = []
+  const vertexColor = []
+  const vertexCoords = []
+
+  const stepElevation = 90 / numStepsElevation
+  const stepAngle = 360 / numStepsAngle
+
+  for (let elevation = -90; elevation < 90; elevation += stepElevation) {
+    const radiusXZ = radius * Math.cos(elevation * Math.PI / 180)
+    const radiusY = radius * Math.sin(elevation * Math.PI / 180)
+
+    const radiusXZ2 = radius * Math.cos((elevation + stepElevation) * Math.PI / 180)
+    const radiusY2 = radius * Math.sin((elevation + stepElevation) * Math.PI / 180)
+
+    for (let angle = 0; angle < 360; angle += stepAngle) {
+      const p1 = [
+        radiusXZ * Math.cos(angle * Math.PI / 180),
+        radiusY,
+        radiusXZ * Math.sin(angle * Math.PI / 180)
+      ]
+      const [p1x, p1y, p1z] = p1
+
+      const p2 = [
+        radiusXZ * Math.cos((angle + stepAngle) * Math.PI / 180),
+        radiusY,
+        radiusXZ * Math.sin((angle + stepAngle) * Math.PI / 180)
+      ]
+      const [p2x, p2y, p2z] = p2
+
+      const p3 = [
+        radiusXZ2 * Math.cos(angle * Math.PI / 180),
+        radiusY2,
+        radiusXZ2 * Math.sin(angle * Math.PI / 180)
+      ]
+      const [p3x, p3y, p3z] = p3
+
+      const p4 = [
+        radiusXZ2 * Math.cos((angle + stepAngle) * Math.PI / 180),
+        radiusY2,
+        radiusXZ2 * Math.sin((angle + stepAngle) * Math.PI / 180)
+      ]
+      const [p4x, p4y, p4z] = p4
+
+      const p1s = Math.sqrt(p1x * p1x + p1y * p1y + p1z * p1z)
+      const p2s = Math.sqrt(p2x * p2x + p2y * p2y + p2z * p2z)
+      const p3s = Math.sqrt(p3x * p3x + p3y * p3y + p3z * p3z)
+      const p4s = Math.sqrt(p4x * p4x + p4y * p4y + p4z * p4z)
+
+      vertexPosition.push(...createRect(p1, p2, p3, p4))
+      vertexColor.push(...createRectColor(1.0, 1.0, 1.0))
+      vertexCoords.push(...createRectCoords(0, 0, 1, 0, 0, 1))
+
+      vertexNormal.push(
+        ...createRect(
+          p1.map(x => x / p1s),
+          p2.map(x => x / p2s),
+          p3.map(x => x / p3s),
+          p4.map(x => x / p4s)
+        )
+      )
+    }
+  }
+  return [vertexPosition, vertexNormal, vertexColor, vertexCoords]
+}
+
+
+
+function startGL() 
+{
+  alert("StartGL");
+  let canvas = document.getElementById("canvas3D"); //wyszukanie obiektu w strukturze strony 
+  gl = canvas.getContext("experimental-webgl"); //pobranie kontekstu OpenGL'u z obiektu canvas
+  gl.viewportWidth = canvas.width; //przypisanie wybranej przez nas rozdzielczości do systemu OpenGL
+  gl.viewportHeight = canvas.height;
+
+
+  //Kod shaderów
+  const vertextShaderSource = ` //Znak akcentu z przycisku tyldy - na lewo od przycisku 1 na klawiaturze
+    precision highp float;
+    attribute vec3 aVertexPosition;
+    attribute vec3 aVertexColor;
+    attribute vec2 aVertexCoords;
+    attribute vec3 aVertexNormal;
+    uniform mat4 uMVMatrix;
+    uniform mat4 uPMatrix;
+    varying vec3 vPos;
+    varying vec3 vColor;
+    varying vec2 vTexUV;
+    varying vec3 vNormal;
+    void main(void) {
+      gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+      vPos = aVertexPosition;
+      vColor = aVertexColor;
+      vTexUV = aVertexCoords;
+      vNormal = aVertexNormal;
+    }
+  `;
+  const fragmentShaderSource = `
+    precision highp float;
+    varying vec3 vPos;
+    varying vec3 vColor;
+    varying vec2 vTexUV;
+    varying vec3 vNormal;
+    uniform sampler2D uSampler;
+    uniform vec3 uLightPosition;
+    void main(void) {
+      vec3 lightDirection = normalize(uLightPosition - vPos);
+      float brightness = max(dot(vNormal,lightDirection), 0.0);
+      gl_FragColor = clamp(texture2D(uSampler, vTexUV) * vec4(brightness, brightness, brightness, 1.0), 0.0, 1.0);
+  }
+  `;
+  let fragmentShader = gl.createShader(gl.FRAGMENT_SHADER); //Stworzenie obiektu shadera 
+  let vertexShader   = gl.createShader(gl.VERTEX_SHADER);
+  gl.shaderSource(fragmentShader, fragmentShaderSource); //Podpięcie źródła kodu shader
+  gl.shaderSource(vertexShader, vertextShaderSource);
+  gl.compileShader(fragmentShader); //Kompilacja kodu shader
+  gl.compileShader(vertexShader);
+  if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) { //Sprawdzenie ewentualnych błedów kompilacji
+    alert(gl.getShaderInfoLog(fragmentShader));
+    return null;
+  }
+  if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+    alert(gl.getShaderInfoLog(vertexShader));
+    return null;
+  }
+ 
+  shaderProgram = gl.createProgram(); //Stworzenie obiektu programu 
+  gl.attachShader(shaderProgram, vertexShader); //Podpięcie obu shaderów do naszego programu wykonywanego na karcie graficznej
+  gl.attachShader(shaderProgram, fragmentShader);
+  gl.linkProgram(shaderProgram);
+  if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) alert("Could not initialise shaders");  //Sprawdzenie ewentualnych błedów
+  
+  //Opis sceny 3D, położenie punktów w przestrzeni 3D w formacie X,Y,Z 
+  let vertexPosition; 
+  let vertexNormal;
+  let vertexCoord;
+  let indexes;
+  [vertexPosition, vertexNormal, vertexColor, vertexCoords] = createSphere(0, 0, 0, 2, 6, 12)
+  
+  vertexPositionBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexPositionBuffer)
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexPosition), gl.STATIC_DRAW)
+  vertexPositionBuffer.itemSize = 3
+  vertexPositionBuffer.numItems = vertexPosition.length / 9
+
+  vertexColorBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexColorBuffer)
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexColor), gl.STATIC_DRAW)
+  vertexColorBuffer.itemSize = 3
+  vertexColorBuffer.numItems = vertexColor.length / 9
+
+  vertexCoordsBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexCoordsBuffer)
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexCoords), gl.STATIC_DRAW)
+  vertexCoordsBuffer.itemSize = 2
+  vertexCoordsBuffer.numItems = vertexCoords.length / 6
+
+  vertexNormalBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexNormalBuffer)
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexNormal), gl.STATIC_DRAW)
+  vertexNormalBuffer.itemSize = 3
+  vertexNormalBuffer.numItems = vertexNormal.length / 9
+
+  textureBuffer = gl.createTexture();
+  var textureImg = new Image();
+  textureImg.onload = () => {
+    gl.bindTexture(gl.TEXTURE_2D, textureBuffer)
+    // Faktyczne załadowanie danych obrazu do pamieci karty graficznej
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textureImg)
+    // Ustawienie parametrów próbkowania tekstury
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+  }
+  textureImg.src = 'Tex.png'
+
+  const aspect = gl.viewportWidth / gl.viewportHeight
+
+  uPMatrix = [
+    1.0 / (aspect * Math.tan(fov / 2)), 0, 0, 0,
+    0, 1.0 / (Math.tan(fov / 2)), 0, 0,
+    0, 0, -(zFar + zNear) / (zFar - zNear), -1,
+    0, 0, -(2 * zFar * zNear) / (zFar - zNear), 0.0
+  ]
+
+  Tick();
+} 
+//let angle = 45.0; //Macierz transformacji świata - określenie położenia kamery
+let angleX = 0.0
+let angleY = 0.0
+let angleZ = 0.0
+var tZ = -8.0
+
+let lightX = 10
+let lightY = 4
+let lightZ = 20
+
+var obj1x = -3.0
+var obj1y = 0.0
+var obj1z = -10.0
+var obj1Sizedx = 1
+var obj1Sizedy = 1
+var obj1Sizedz = 1
+
+var obj2x = -1.0
+var obj2y = -1.0
+var obj2z = -10.0
+var obj2Sizedx = 0.9
+var obj2Sizedy = 0.9
+var obj2Sizedz = 0.9
+
+var obj3x = 1.0
+var obj3y = 0.0
+var obj3z = -10.0
+var obj3Sizedx = 0.8
+var obj3Sizedy = 0.8
+var obj3Sizedz = 0.8
+
+var obj4x = 2.5
+var obj4y = -1.0
+var obj4z = -10.0
+var obj4Sizedx = 0.7
+var obj4Sizedy = 0.7
+var obj4Sizedz = 0.7
+
+var obj5x = 4.0
+var obj5y = -1.5
+var obj5z = -10.0
+var obj5Sizedx = 0.6
+var obj5Sizedy = 0.6
+var obj5Sizedz = 0.6
+
+let camPosX = 0
+let camPosY = 0
+let camPosZ = 0
+
+var fov = 45.0 * Math.PI / 180.0
+var zFar = 100.0
+var zNear = 0.1
+
+function Tick()
+{  
+  let uMVMatrix1 = createIdentityMatrix()
+  uMVMatrix1 = mulMatrix(uMVMatrix1, createScaleMatrix(obj1Sizedx, obj1Sizedy, obj1Sizedz))
+  uMVMatrix1 = mulMatrix(uMVMatrix1, createTranslationMatrix(obj1x, obj1y, obj1z))
+  uMVMatrix1 = mulMatrix(uMVMatrix1, createRotationXMatrix(angleX))
+  uMVMatrix1 = mulMatrix(uMVMatrix1, createRotationYMatrix(angleY))
+  uMVMatrix1 = mulMatrix(uMVMatrix1, createRotationZMatrix(angleZ))
+  uMVMatrix1 = mulMatrix(uMVMatrix1, createTranslationMatrix(0, 0, tZ))
+  uMVMatrix1 = mulMatrix(uMVMatrix1, createTranslationMatrix(camPosX, camPosY, camPosZ))
+
+  let uMVMatrix2 = createIdentityMatrix()
+  uMVMatrix2 = mulMatrix(uMVMatrix2, createScaleMatrix(obj2Sizedx, obj2Sizedy, obj2Sizedz))
+  uMVMatrix2 = mulMatrix(uMVMatrix2, createTranslationMatrix(obj2x, obj2y, obj2z))
+  uMVMatrix2 = mulMatrix(uMVMatrix2, createRotationXMatrix(angleX))
+  uMVMatrix2 = mulMatrix(uMVMatrix2, createRotationYMatrix(angleY))
+  uMVMatrix2 = mulMatrix(uMVMatrix2, createRotationZMatrix(angleZ))
+  uMVMatrix2 = mulMatrix(uMVMatrix2, createTranslationMatrix(0, 0, tZ))
+  uMVMatrix2 = mulMatrix(uMVMatrix2, createTranslationMatrix(camPosX, camPosY, camPosZ))
+
+  let uMVMatrix3 = createIdentityMatrix()
+  uMVMatrix3 = mulMatrix(uMVMatrix3, createScaleMatrix(obj3Sizedx, obj3Sizedy, obj3Sizedz))
+  uMVMatrix3 = mulMatrix(uMVMatrix3, createTranslationMatrix(obj3x, obj3y, obj3z))
+  uMVMatrix3 = mulMatrix(uMVMatrix3, createRotationXMatrix(angleX))
+  uMVMatrix3 = mulMatrix(uMVMatrix3, createRotationYMatrix(angleY))
+  uMVMatrix3 = mulMatrix(uMVMatrix3, createRotationZMatrix(angleZ))
+  uMVMatrix3 = mulMatrix(uMVMatrix3, createTranslationMatrix(0, 0, tZ))
+  uMVMatrix3 = mulMatrix(uMVMatrix3, createTranslationMatrix(camPosX, camPosY, camPosZ))
+
+  let uMVMatrix4 = createIdentityMatrix()
+  uMVMatrix4 = mulMatrix(uMVMatrix4, createScaleMatrix(obj4Sizedx, obj4Sizedy, obj4Sizedz))
+  uMVMatrix4 = mulMatrix(uMVMatrix4, createTranslationMatrix(obj4x, obj4y, obj4z))
+  uMVMatrix4 = mulMatrix(uMVMatrix4, createRotationXMatrix(angleX))
+  uMVMatrix4 = mulMatrix(uMVMatrix4, createRotationYMatrix(angleY))
+  uMVMatrix4 = mulMatrix(uMVMatrix4, createRotationZMatrix(angleZ))
+  uMVMatrix4 = mulMatrix(uMVMatrix4, createTranslationMatrix(0, 0, tZ))
+  uMVMatrix4 = mulMatrix(uMVMatrix4, createTranslationMatrix(camPosX, camPosY, camPosZ))
+
+  let uMVMatrix5 = createIdentityMatrix()
+  uMVMatrix5 = mulMatrix(uMVMatrix5, createScaleMatrix(obj5Sizedx, obj5Sizedy, obj5Sizedz))
+  uMVMatrix5 = mulMatrix(uMVMatrix5, createTranslationMatrix(obj5x, obj5y, obj5z))
+  uMVMatrix5 = mulMatrix(uMVMatrix5, createRotationXMatrix(angleX))
+  uMVMatrix5 = mulMatrix(uMVMatrix5, createRotationYMatrix(angleY))
+  uMVMatrix5 = mulMatrix(uMVMatrix5, createRotationZMatrix(angleZ))
+  uMVMatrix5 = mulMatrix(uMVMatrix5, createTranslationMatrix(0, 0, tZ))
+  uMVMatrix5 = mulMatrix(uMVMatrix5, createTranslationMatrix(camPosX, camPosY, camPosZ))
+
+  //alert(uPMatrix);
+  
+  //Render Scene
+  
+  gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight)
+  gl.clearColor(1.0, 0.0, 0.0, 1.0)
+  gl.clearDepth(1.0)
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+  gl.useProgram(shaderProgram)
+
+  gl.enable(gl.DEPTH_TEST)
+  gl.depthFunc(gl.LEQUAL)
+
+  gl.uniformMatrix4fv(gl.getUniformLocation(shaderProgram, 'uPMatrix'), false, new Float32Array(uPMatrix))
+  gl.uniformMatrix4fv(gl.getUniformLocation(shaderProgram, 'uMVMatrix'), false, new Float32Array(uMVMatrix1))
+
+  gl.enableVertexAttribArray(gl.getAttribLocation(shaderProgram, 'aVertexPosition'))
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexPositionBuffer)
+  gl.vertexAttribPointer(gl.getAttribLocation(shaderProgram, 'aVertexPosition'), vertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0)
+
+  gl.enableVertexAttribArray(gl.getAttribLocation(shaderProgram, 'aVertexColor'))
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexColorBuffer)
+  gl.vertexAttribPointer(gl.getAttribLocation(shaderProgram, 'aVertexColor'), vertexColorBuffer.itemSize, gl.FLOAT, false, 0, 0)
+
+  gl.enableVertexAttribArray(gl.getAttribLocation(shaderProgram, 'aVertexCoords'))
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexCoordsBuffer)
+  gl.vertexAttribPointer(gl.getAttribLocation(shaderProgram, 'aVertexCoords'), vertexCoordsBuffer.itemSize, gl.FLOAT, false, 0, 0)
+
+  gl.enableVertexAttribArray(gl.getAttribLocation(shaderProgram, 'aVertexNormal'))
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexNormalBuffer)
+  gl.vertexAttribPointer(gl.getAttribLocation(shaderProgram, 'aVertexNormal'), vertexNormalBuffer.itemSize, gl.FLOAT, false, 0, 0)
+
+  gl.uniform3f(gl.getUniformLocation(shaderProgram, 'uLightPosition'), lightX, lightY, lightZ)
+
+  gl.activeTexture(gl.TEXTURE0)
+  gl.bindTexture(gl.TEXTURE_2D, textureBuffer)
+  gl.uniform1i(gl.getUniformLocation(shaderProgram, 'uSampler'), 0)
+
+  gl.drawArrays(gl.TRIANGLES, 0, vertexPositionBuffer.numItems * vertexPositionBuffer.itemSize)
+
+  gl.uniformMatrix4fv(gl.getUniformLocation(shaderProgram, 'uMVMatrix'), false, new Float32Array(uMVMatrix2))
+  gl.drawArrays(gl.TRIANGLES, 0, vertexPositionBuffer.numItems * vertexPositionBuffer.itemSize)
+
+  gl.uniformMatrix4fv(gl.getUniformLocation(shaderProgram, 'uMVMatrix'), false, new Float32Array(uMVMatrix3))
+  gl.drawArrays(gl.TRIANGLES, 0, vertexPositionBuffer.numItems * vertexPositionBuffer.itemSize)
+
+  gl.uniformMatrix4fv(gl.getUniformLocation(shaderProgram, 'uMVMatrix'), false, new Float32Array(uMVMatrix4))
+  gl.drawArrays(gl.TRIANGLES, 0, vertexPositionBuffer.numItems * vertexPositionBuffer.itemSize)
+
+  gl.uniformMatrix4fv(gl.getUniformLocation(shaderProgram, 'uMVMatrix'), false, new Float32Array(uMVMatrix5))
+  gl.drawArrays(gl.TRIANGLES, 0, vertexPositionBuffer.numItems * vertexPositionBuffer.itemSize)
+   
+  setTimeout(Tick,100);
+}
+
+
+function handlekeydown(e)
+{
+ if(e.keyCode==87) angleX=angleX+1.0; //W
+ if(e.keyCode==83) angleX=angleX-1.0; //S
+ if(e.keyCode==68) angleY=angleY+1.0;
+ if(e.keyCode==65) angleY=angleY-1.0;
+ if(e.keyCode==81) angleZ=angleZ+1.0;
+ if(e.keyCode==69) angleZ=angleZ-1.0;
+ //alert(e.keyCode);
+ //alert(angleX);
+}
+</script>
+</head>
+<body onload="startGL()" onkeydown="handlekeydown(event)">
+<canvas id="canvas3D" width="640" height="480" style="border: solid rgb(223, 214, 214) 1px"></canvas>
+</body>
+</html>
